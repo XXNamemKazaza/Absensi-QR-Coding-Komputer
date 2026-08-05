@@ -54,6 +54,29 @@
         .section.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+        /* UI Kalender Hari Ini */
+        .calendar-card {
+            background: var(--white);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2);
+            text-align: center;
+            width: 180px;
+            margin: 0 auto 20px auto;
+            border: 2px solid var(--primary);
+        }
+        .cal-header {
+            background: var(--primary); color: white;
+            padding: 6px; font-weight: 600; font-size: 0.9rem; text-transform: uppercase;
+        }
+        .cal-body {
+            font-size: 3rem; font-weight: 800; color: var(--text-dark); padding: 5px 0; line-height: 1;
+        }
+        .cal-footer {
+            background: #eef2ff; color: var(--primary-dark);
+            font-size: 0.8rem; padding: 6px; font-weight: 800;
+        }
+
         /* Scan Section */
         #reader { width: 100%; max-width: 500px; margin: 0 auto; border-radius: 10px; overflow: hidden; border: 3px solid var(--primary); }
         .scan-result { margin-top: 20px; text-align: center; font-size: 1.1rem; font-weight: 600; min-height: 30px;}
@@ -61,13 +84,19 @@
         .text-danger { color: var(--danger); }
         .text-warning { color: var(--warning); }
 
-        /* Cards & Lists */
-        .card { background: var(--white); border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+        /* Cards & Lists (Fix UI Badge Terpotong) */
+        .card { 
+            background: var(--white); border-radius: 10px; padding: 15px; margin-bottom: 15px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; 
+            align-items: center; gap: 10px; flex-wrap: wrap; 
+        }
+        .card-info { flex: 1; min-width: 140px; }
         .card-info h3 { font-size: 1rem; margin-bottom: 3px; }
         .card-info p { font-size: 0.85rem; color: var(--text-light); }
         
-        /* Badges */
-        .badge { padding: 4px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+        /* Badges (Fix UI Warna Terpisah & Anti Terpotong) */
+        .badge-group { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+        .badge { padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
         .badge-danger { background: #fee2e2; color: var(--danger); }
         .badge-success { background: #d1fae5; color: var(--success); }
 
@@ -97,11 +126,18 @@
         <div id="sync-status">⏳ Mengambil Data Database...</div>
     </header>
 
-    <!-- LOADING SCREEN -->
     <div id="loading-overlay">Memproses Data...</div>
 
-    <!-- 1. SECTION SCAN QR -->
+    <!-- 1. SECTION SCAN QR (DENGAN UI KALENDER) -->
     <div id="sec-scan" class="section">
+        
+        <!-- UI Kalender Hari Ini -->
+        <div class="calendar-card">
+            <div class="cal-header" id="cal-month">Bulan</div>
+            <div class="cal-body" id="cal-date">00</div>
+            <div class="cal-footer">JADWAL EKSTRA HARI INI</div>
+        </div>
+
         <h2 style="text-align:center; margin-bottom:15px; font-size: 1.1rem;">Arahkan Kamera ke QR Code Siswa</h2>
         <div id="reader"></div>
         <div class="scan-result" id="scan-msg">Menunggu Scan...</div>
@@ -155,16 +191,18 @@
 
     <script>
         // ==========================================
-        // 1. KONFIGURASI DATABASE & STATE
+        // 1. KONFIGURASI DATABASE
         // ==========================================
         
         // PENTING: GANTI TEKS DI BAWAH INI DENGAN URL GOOGLE SCRIPT KAMU!
         const URL_GAS = "https://script.google.com/macros/s/AKfycbz4FviMQA3UYfljGfjfp2NZ_1rLV9aeV791p-GsTw3cuuMYAetlla6WDBcXTCqDPpDQ/exec"; 
         
-        let dataSiswa = []; // Sekarang kosong, diisi otomatis dari Spreadsheet
-        let attendanceLog = []; // Menyimpan data absen
+        let dataSiswa = []; 
+        let attendanceLog = []; 
         let html5QrcodeScanner;
         let isScanning = false; 
+
+        const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
         const getTodayDate = () => {
             const d = new Date();
@@ -174,6 +212,15 @@
             const d = new Date();
             return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
         };
+
+        // ==========================================
+        // FUNGSI UPDATE UI KALENDER
+        // ==========================================
+        function updateCalendarUI() {
+            const d = new Date();
+            document.getElementById("cal-month").innerText = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+            document.getElementById("cal-date").innerText = d.getDate().toString().padStart(2, '0');
+        }
 
         // ==========================================
         // 2. FUNGSI FETCH DATA DARI SPREADSHEET
@@ -186,7 +233,6 @@
                 const response = await fetch(URL_GAS);
                 const resData = await response.json();
                 
-                // Pisahkan data dari server (JSON Object dari backend baru)
                 attendanceLog = resData.attendance || [];
                 dataSiswa = resData.students || [];
 
@@ -201,7 +247,7 @@
         }
 
         // ==========================================
-        // 3. FUNGSI MENU NAVIGASI & UI
+        // 3. FUNGSI MENU NAVIGASI
         // ==========================================
         function switchTab(tabId, element) {
             document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
@@ -212,7 +258,7 @@
 
             if(tabId === 'sec-scan') {
                 if(dataSiswa.length === 0) {
-                    alert("Data siswa masih kosong atau gagal sinkron! Pastikan isi sheet 'DataSiswa'.");
+                    alert("Data siswa kosong. Pastikan isi sheet 'DataSiswa'.");
                 }
                 if(!isScanning) { startScanner(); isScanning = true; }
             } else {
@@ -250,7 +296,6 @@
             const msgBox = document.getElementById("scan-msg");
             const namaSiswa = decodedText.trim().toUpperCase();
 
-            // Cek ke dalam dataSiswa yang diambil dari Spreadsheet
             const siswaValid = dataSiswa.find(s => s.nama === namaSiswa);
 
             if (!siswaValid) {
@@ -320,7 +365,7 @@
         }
 
         // ==========================================
-        // 5. LOGIKA LIST SISWA
+        // 5. LOGIKA LIST SISWA (ALFA BULANAN)
         // ==========================================
         function getUniqueDates() {
             return [...new Set(attendanceLog.map(log => log.tanggal))];
@@ -328,11 +373,17 @@
 
         function renderSiswa() {
             const query = document.getElementById("search-siswa").value.toUpperCase();
-            let totalPertemuan = getUniqueDates().length;
             
-            if (totalPertemuan === 0) totalPertemuan = 1; 
+            // Logika Deteksi Bulan Ini
+            const today = new Date();
+            const currentMonthName = monthNames[today.getMonth()];
+            const currentMonthSuffix = `${(today.getMonth()+1).toString().padStart(2,'0')}/${today.getFullYear()}`;
             
-            const filteredSiswa = dataSiswa.filter(s => s.nama.includes(query));
+            const uniqueDates = getUniqueDates();
+            // Filter agar hanya menghitung pertemuan di bulan ini
+            const datesThisMonth = uniqueDates.filter(d => d.endsWith(currentMonthSuffix));
+            let totalPertemuanBulanIni = datesThisMonth.length;
+            
             const container = document.getElementById("list-siswa-container");
             let html = "";
             
@@ -341,13 +392,31 @@
                 return;
             }
 
+            // Tampilkan Header Rekap Bulan Ini
+            html += `<p style="text-align:center; font-size:0.85rem; color:var(--primary-dark); font-weight:bold; margin-bottom:15px; background:#eef2ff; padding:8px; border-radius:8px;">📊 Rekap Bulan ${currentMonthName}: ${totalPertemuanBulanIni} Pertemuan Ekstra</p>`;
+
+            const filteredSiswa = dataSiswa.filter(s => s.nama.includes(query));
+
             filteredSiswa.forEach(siswa => {
-                const jmlHadir = attendanceLog.filter(log => log.nama === siswa.nama).length;
-                const jmlBolos = totalPertemuan - jmlHadir;
+                // Hitung Hadir dan Alfa KHUSUS di bulan ini
+                const logsThisMonth = attendanceLog.filter(log => log.nama === siswa.nama && log.tanggal.endsWith(currentMonthSuffix));
+                const jmlHadir = logsThisMonth.length;
+                const jmlBolos = totalPertemuanBulanIni > 0 ? (totalPertemuanBulanIni - jmlHadir) : 0;
                 
-                let badge = `<span class="badge badge-success">Hadir: ${jmlHadir} | Alfa: ${jmlBolos}</span>`;
-                if (jmlBolos >= 3 && totalPertemuan >= 3) {
-                    badge = `<span class="badge badge-danger">⚠️ SP/DO (Alfa: ${jmlBolos}x)</span>`;
+                let badges = `
+                    <div class="badge-group">
+                        <span class="badge badge-success">Hadir: ${jmlHadir}</span>
+                        <span class="badge badge-danger">Alfa: ${jmlBolos}</span>
+                    </div>
+                `;
+                
+                // Jika Alfa mencapai 3x DI BULAN INI
+                if (jmlBolos >= 3 && totalPertemuanBulanIni >= 3) {
+                    badges = `
+                        <div class="badge-group">
+                            <span class="badge badge-danger">⚠️ SP/DO (${jmlBolos}x Alfa di Bln ${currentMonthName})</span>
+                        </div>
+                    `;
                 }
                 
                 html += `
@@ -356,7 +425,7 @@
                             <h3>${siswa.nama}</h3>
                             <p>Kelas: ${siswa.kelas}</p>
                         </div>
-                        ${badge}
+                        ${badges}
                     </div>
                 `;
             });
@@ -364,7 +433,7 @@
         }
 
         // ==========================================
-        // 6. LOGIKA MENU KEHADIRAN
+        // 6. LOGIKA MENU KEHADIRAN (HISTORY)
         // ==========================================
         function renderKehadiran() {
             const dates = getUniqueDates().reverse();
@@ -457,8 +526,9 @@
         function beepSuccess() { const ctx = new AudioContext(); const osc = ctx.createOscillator(); osc.type="sine"; osc.frequency.setValueAtTime(800, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1); }
         function beepError() { const ctx = new AudioContext(); const osc = ctx.createOscillator(); osc.type="sawtooth"; osc.frequency.setValueAtTime(200, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); }
 
-        // Start
+        // Start Up
         window.onload = () => {
+            updateCalendarUI();
             fetchAttendance(); 
         };
     </script>

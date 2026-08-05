@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sistem Absensi Ekstra Coding</title>
+    <!-- Library QR Scanner -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+
+        :root {
+            --bg-color: #f4f7f6;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text-dark: #1f2937;
+            --text-light: #6b7280;
+            --white: #ffffff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-dark); padding-bottom: 80px; }
+
+        /* Header */
+        header {
+            background: var(--primary); color: var(--white);
+            padding: 15px 20px; text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky; top: 0; z-index: 100;
+        }
+        header h1 { font-size: 1.2rem; font-weight: 800; }
+        #sync-status { font-size: 0.8rem; margin-top: 5px; opacity: 0.8; }
+
+        /* Navigation Bottom */
+        nav {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background: var(--white); box-shadow: 0 -2px 15px rgba(0,0,0,0.05);
+            display: flex; justify-content: space-around;
+            padding: 10px 0 20px 0; z-index: 100;
+        }
+        .nav-item {
+            display: flex; flex-direction: column; align-items: center;
+            color: var(--text-light); text-decoration: none; font-size: 0.75rem;
+            cursor: pointer; transition: 0.3s; width: 25%;
+        }
+        .nav-item.active { color: var(--primary); font-weight: 600; }
+        .nav-item svg { width: 24px; height: 24px; margin-bottom: 4px; fill: currentColor; }
+
+        /* Content Sections */
+        .section { display: none; padding: 20px; animation: fadeIn 0.3s; }
+        .section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Scan Section */
+        #reader { width: 100%; max-width: 500px; margin: 0 auto; border-radius: 10px; overflow: hidden; border: 3px solid var(--primary); }
+        .scan-result { margin-top: 20px; text-align: center; font-size: 1.1rem; font-weight: 600; min-height: 30px;}
+        .text-success { color: var(--success); }
+        .text-danger { color: var(--danger); }
+        .text-warning { color: var(--warning); }
+
+        /* Cards & Lists */
+        .card { background: var(--white); border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+        .card-info h3 { font-size: 1rem; margin-bottom: 3px; }
+        .card-info p { font-size: 0.85rem; color: var(--text-light); }
+        
+        /* Badges */
+        .badge { padding: 4px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+        .badge-danger { background: #fee2e2; color: var(--danger); }
+        .badge-success { background: #d1fae5; color: var(--success); }
+
+        /* Accordion Kehadiran */
+        .date-header { background: var(--white); padding: 15px; border-radius: 8px; font-weight: 600; margin-bottom: 10px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; }
+        .date-content { display: none; padding: 10px 5px 20px 5px; }
+        .date-content.active { display: block; }
+        
+        .list-hadir { border-left: 3px solid var(--success); padding-left: 10px; margin-bottom: 15px; }
+        .list-absen { border-left: 3px solid var(--danger); padding-left: 10px; }
+        
+        .student-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+        .btn-delete { background: var(--danger); color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; }
+
+        /* Buttons & Inputs */
+        .search-bar { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; outline: none; }
+        .btn-export { width: 100%; background: var(--success); color: white; padding: 15px; border: none; border-radius: 10px; font-size: 1.1rem; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; }
+        .btn-export svg { width: 24px; height: 24px; fill: white; }
+
+        #loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.8); z-index: 1000; display: flex; justify-content: center; align-items: center; font-weight: bold; color: var(--primary); display: none; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>ABSENSI EKSTRA KOMPUTER</h1>
+        <div id="sync-status">⏳ Mengambil Data Database...</div>
+    </header>
+
+    <!-- LOADING SCREEN -->
+    <div id="loading-overlay">Memproses Data...</div>
+
+    <!-- 1. SECTION SCAN QR -->
+    <div id="sec-scan" class="section">
+        <h2 style="text-align:center; margin-bottom:15px; font-size: 1.1rem;">Arahkan Kamera ke QR Code Siswa</h2>
+        <div id="reader"></div>
+        <div class="scan-result" id="scan-msg">Menunggu Scan...</div>
+        <div style="margin-top:20px;">
+            <h3 style="font-size: 0.9rem; margin-bottom: 10px; color: var(--text-light);">Riwayat Scan Terbaru (Hari Ini):</h3>
+            <div id="recent-scans"></div>
+        </div>
+    </div>
+
+    <!-- 2. SECTION LIST SISWA (ACTIVE DEFAULT) -->
+    <div id="sec-siswa" class="section active">
+        <input type="text" class="search-bar" id="search-siswa" placeholder="Cari nama siswa..." onkeyup="renderSiswa()">
+        <div id="list-siswa-container"></div>
+    </div>
+
+    <!-- 3. SECTION KEHADIRAN (HISTORY) -->
+    <div id="sec-hadir" class="section">
+        <h2 style="font-size: 1.2rem; margin-bottom: 15px;">Rekap Pertemuan</h2>
+        <div id="list-tanggal-container"></div>
+    </div>
+
+    <!-- 4. SECTION EXPORT -->
+    <div id="sec-export" class="section">
+        <h2 style="text-align:center; margin-bottom: 10px;">Export Data Absensi</h2>
+        <p style="text-align:center; font-size:0.9rem; color:var(--text-light);">Unduh seluruh data kehadiran menjadi format file Spreadsheet/Excel (.csv)</p>
+        <button class="btn-export" onclick="exportData()">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 15.1L9.4 15l1.6-1.6 2 2 4.1-4.2 1.5 1.5-5.6 5.4zM13 9V3.5L18.5 9H13z"/></svg>
+            Export ke Excel (.CSV)
+        </button>
+    </div>
+
+    <!-- BOTTOM NAVIGATION -->
+    <nav>
+        <div class="nav-item" onclick="switchTab('sec-scan', this)">
+            <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zm2 2v4h4V5zm8-2h8v8h-8zm2 2v4h4V5zM3 13h8v8H3zm2 2v4h4v-4zm13-2h-3v2h3v-2zm-3 4h3v2h-3v-2zm-2-2h2v2h-2v-2zm4 2h2v2h-2v-2z"/></svg>
+            Scan QR
+        </div>
+        <div class="nav-item active" onclick="switchTab('sec-siswa', this)">
+            <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+            Siswa
+        </div>
+        <div class="nav-item" onclick="switchTab('sec-hadir', this)">
+            <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+            Kehadiran
+        </div>
+        <div class="nav-item" onclick="switchTab('sec-export', this)">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            Export
+        </div>
+    </nav>
+
+    <script>
+        // ==========================================
+        // 1. KONFIGURASI DATABASE & STATE
+        // ==========================================
+        
+        // PENTING: GANTI TEKS DI BAWAH INI DENGAN URL GOOGLE SCRIPT KAMU!
+        const URL_GAS = "https://script.google.com/macros/s/AKfycbz4FviMQA3UYfljGfjfp2NZ_1rLV9aeV791p-GsTw3cuuMYAetlla6WDBcXTCqDPpDQ/exec"; 
+        
+        let dataSiswa = []; // Sekarang kosong, diisi otomatis dari Spreadsheet
+        let attendanceLog = []; // Menyimpan data absen
+        let html5QrcodeScanner;
+        let isScanning = false; 
+
+        const getTodayDate = () => {
+            const d = new Date();
+            return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
+        };
+        const getTodayTime = () => {
+            const d = new Date();
+            return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+        };
+
+        // ==========================================
+        // 2. FUNGSI FETCH DATA DARI SPREADSHEET
+        // ==========================================
+        async function fetchAttendance() {
+            document.getElementById("sync-status").innerText = "⏳ Membaca Spreadsheet...";
+            try {
+                if (URL_GAS === "URL_GAS_KAMU_DISINI") throw new Error("URL belum diganti");
+                
+                const response = await fetch(URL_GAS);
+                const resData = await response.json();
+                
+                // Pisahkan data dari server (JSON Object dari backend baru)
+                attendanceLog = resData.attendance || [];
+                dataSiswa = resData.students || [];
+
+                document.getElementById("sync-status").innerText = "🟢 Database Sinkron & Siap!";
+            } catch (error) {
+                document.getElementById("sync-status").innerText = "🔴 Gagal Sinkron. Cek URL / Internet.";
+            } finally {
+                renderSiswa();
+                renderKehadiran();
+                renderRecentScans();
+            }
+        }
+
+        // ==========================================
+        // 3. FUNGSI MENU NAVIGASI & UI
+        // ==========================================
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            element.classList.add('active');
+
+            if(tabId === 'sec-scan') {
+                if(dataSiswa.length === 0) {
+                    alert("Data siswa masih kosong atau gagal sinkron! Pastikan isi sheet 'DataSiswa'.");
+                }
+                if(!isScanning) { startScanner(); isScanning = true; }
+            } else {
+                if(html5QrcodeScanner) { html5QrcodeScanner.pause(); isScanning = false; }
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+        }
+
+        // ==========================================
+        // 4. LOGIKA SCAN QR CODE
+        // ==========================================
+        let lastScannedName = "";
+        let scanTimer;
+
+        function startScanner() {
+            if(!html5QrcodeScanner) {
+                html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250}, aspectRatio: 1.0 }, false);
+                html5QrcodeScanner.render(onScanSuccess);
+            } else {
+                html5QrcodeScanner.resume();
+            }
+        }
+
+        async function onScanSuccess(decodedText) {
+            if (decodedText === lastScannedName) return; 
+            
+            html5QrcodeScanner.pause();
+            lastScannedName = decodedText;
+            clearTimeout(scanTimer);
+            scanTimer = setTimeout(() => { lastScannedName = ""; }, 3000);
+
+            const msgBox = document.getElementById("scan-msg");
+            const namaSiswa = decodedText.trim().toUpperCase();
+
+            // Cek ke dalam dataSiswa yang diambil dari Spreadsheet
+            const siswaValid = dataSiswa.find(s => s.nama === namaSiswa);
+
+            if (!siswaValid) {
+                msgBox.innerHTML = `<span class="text-danger">❌ TIDAK DIKENAL:<br>${namaSiswa}</span>`;
+                beepError();
+                setTimeout(() => html5QrcodeScanner.resume(), 1500);
+                return;
+            }
+
+            msgBox.innerHTML = `<span style="color:var(--primary)">Memproses: ${namaSiswa}...</span>`;
+            
+            try {
+                const payload = {
+                    action: "add",
+                    tanggal: getTodayDate(),
+                    jam: getTodayTime(),
+                    nama: siswaValid.nama,
+                    kelas: siswaValid.kelas
+                };
+
+                const response = await fetch(URL_GAS, {
+                    method: "POST",
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const resData = await response.json();
+
+                if (resData.status === "duplicate") {
+                    msgBox.innerHTML = `<span class="text-warning">⚠️ SUDAH ABSEN:<br>${siswaValid.nama}</span>`;
+                } else if (resData.status === "success") {
+                    msgBox.innerHTML = `<span class="text-success">✅ HADIR:<br>${siswaValid.nama} (${siswaValid.kelas})</span>`;
+                    beepSuccess();
+                    
+                    attendanceLog.push({ tanggal: payload.tanggal, jam: payload.jam, nama: payload.nama, kelas: payload.kelas });
+                    renderRecentScans();
+                    renderSiswa();
+                    renderKehadiran();
+                } else {
+                    msgBox.innerHTML = `<span class="text-danger">❌ ERROR SERVER</span>`;
+                }
+            } catch (err) {
+                msgBox.innerHTML = `<span class="text-danger">❌ OFFLINE! Gagal mengirim. Cek Internet.</span>`;
+            }
+            
+            setTimeout(() => html5QrcodeScanner.resume(), 1500);
+        }
+
+        function renderRecentScans() {
+            const today = getTodayDate();
+            const todayLogs = attendanceLog.filter(log => log.tanggal === today).reverse().slice(0, 5);
+            const container = document.getElementById("recent-scans");
+            
+            if (todayLogs.length === 0) {
+                container.innerHTML = `<p style="font-size:0.85rem; text-align:center; color:var(--text-light)">Belum ada yang absen hari ini.</p>`;
+                return;
+            }
+
+            container.innerHTML = todayLogs.map(log => `
+                <div class="card" style="padding: 10px;">
+                    <div class="card-info">
+                        <h3 style="font-size: 0.9rem;">${log.nama}</h3>
+                        <p>${log.kelas} | Jam: ${log.jam}</p>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        // ==========================================
+        // 5. LOGIKA LIST SISWA
+        // ==========================================
+        function getUniqueDates() {
+            return [...new Set(attendanceLog.map(log => log.tanggal))];
+        }
+
+        function renderSiswa() {
+            const query = document.getElementById("search-siswa").value.toUpperCase();
+            let totalPertemuan = getUniqueDates().length;
+            
+            if (totalPertemuan === 0) totalPertemuan = 1; 
+            
+            const filteredSiswa = dataSiswa.filter(s => s.nama.includes(query));
+            const container = document.getElementById("list-siswa-container");
+            let html = "";
+            
+            if (dataSiswa.length === 0) {
+                container.innerHTML = `<p style="text-align:center; margin-top:20px; color:var(--danger)">Data Siswa Kosong. Harap isi data di Google Sheet "DataSiswa" terlebih dahulu!</p>`;
+                return;
+            }
+
+            filteredSiswa.forEach(siswa => {
+                const jmlHadir = attendanceLog.filter(log => log.nama === siswa.nama).length;
+                const jmlBolos = totalPertemuan - jmlHadir;
+                
+                let badge = `<span class="badge badge-success">Hadir: ${jmlHadir} | Alfa: ${jmlBolos}</span>`;
+                if (jmlBolos >= 3 && totalPertemuan >= 3) {
+                    badge = `<span class="badge badge-danger">⚠️ SP/DO (Alfa: ${jmlBolos}x)</span>`;
+                }
+                
+                html += `
+                    <div class="card">
+                        <div class="card-info">
+                            <h3>${siswa.nama}</h3>
+                            <p>Kelas: ${siswa.kelas}</p>
+                        </div>
+                        ${badge}
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        // ==========================================
+        // 6. LOGIKA MENU KEHADIRAN
+        // ==========================================
+        function renderKehadiran() {
+            const dates = getUniqueDates().reverse();
+            let html = "";
+
+            dates.forEach(date => {
+                const logsForDate = attendanceLog.filter(log => log.tanggal === date);
+                const hadirNames = logsForDate.map(l => l.nama);
+                const absenSiswa = dataSiswa.filter(s => !hadirNames.includes(s.nama));
+
+                let htmlHadir = logsForDate.map(log => `
+                    <div class="student-row">
+                        <span>${log.nama} (${log.kelas}) <small style="color:var(--text-light)">${log.jam}</small></span>
+                        <button class="btn-delete" onclick="hapusKehadiran('${date}', '${log.nama}')">Hapus</button>
+                    </div>
+                `).join("");
+
+                let htmlBolos = absenSiswa.map(s => `
+                    <div class="student-row" style="color: var(--danger)">
+                        <span>${s.nama} (${s.kelas})</span>
+                    </div>
+                `).join("");
+
+                html += `
+                    <div>
+                        <div class="date-header" onclick="this.nextElementSibling.classList.toggle('active')">
+                            <span>📅 ${date}</span>
+                            <span>${hadirNames.length}/${dataSiswa.length} Hadir ▾</span>
+                        </div>
+                        <div class="date-content">
+                            <div class="list-hadir">
+                                <strong style="font-size:0.85rem; color:var(--success)">HADIR:</strong>
+                                ${htmlHadir}
+                            </div>
+                            <div class="list-absen">
+                                <strong style="font-size:0.85rem; color:var(--danger)">TIDAK HADIR (ALFA):</strong>
+                                ${htmlBolos}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            if(dates.length === 0) html = "<p style='text-align:center;'>Belum ada data pertemuan.</p>";
+            document.getElementById("list-tanggal-container").innerHTML = html;
+        }
+
+        async function hapusKehadiran(tanggal, nama) {
+            if(!confirm(`Yakin ingin menghapus kehadiran ${nama} pada tanggal ${tanggal}?`)) return;
+            
+            showLoading(true);
+            try {
+                await fetch(URL_GAS, {
+                    method: "POST",
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: "delete", tanggal: tanggal, nama: nama })
+                });
+                
+                attendanceLog = attendanceLog.filter(log => !(log.tanggal === tanggal && log.nama === nama));
+                renderKehadiran();
+                renderSiswa();
+                renderRecentScans();
+            } catch(e) {
+                alert("Gagal menghapus! Pastikan internet & URL Valid.");
+            }
+            showLoading(false);
+        }
+
+        // ==========================================
+        // 7. EXPORT CSV
+        // ==========================================
+        function exportData() {
+            if (attendanceLog.length === 0) return alert("Belum ada data untuk diexport!");
+            
+            let csvContent = "data:text/csv;charset=utf-8,Tanggal,Jam,Nama,Kelas\n";
+            attendanceLog.forEach(row => {
+                csvContent += `${row.tanggal},${row.jam},${row.nama},${row.kelas}\n`;
+            });
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Absensi_Coding_${getTodayDate().replace(/\//g, "-")}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Beeper
+        function beepSuccess() { const ctx = new AudioContext(); const osc = ctx.createOscillator(); osc.type="sine"; osc.frequency.setValueAtTime(800, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1); }
+        function beepError() { const ctx = new AudioContext(); const osc = ctx.createOscillator(); osc.type="sawtooth"; osc.frequency.setValueAtTime(200, ctx.currentTime); osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); }
+
+        // Start
+        window.onload = () => {
+            fetchAttendance(); 
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generate QR Siswa</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+:root{
+  --bg:#f6f6f7; --surface:#ffffff; --border:#e4e4e7;
+  --text:#18181b; --text-muted:#71717a; --primary:#0f766e; --primary-soft:#ecfdf9;
+  --radius:10px;
+}
+*{ margin:0; padding:0; box-sizing:border-box; font-family:'Inter',sans-serif; }
+body{ background:var(--bg); color:var(--text); padding-bottom:60px; }
+.mono{ font-family:'IBM Plex Mono',monospace; }
+
+.toolbar{
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:16px 20px; position:sticky; top:0; z-index:50;
+  display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;
+}
+.toolbar h1{ font-size:1rem; font-weight:700; }
+.toolbar .status{ font-size:0.78rem; color:var(--text-muted); }
+.toolbar-right{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+select, button{
+  font-family:'Inter',sans-serif; font-size:0.85rem; border-radius:8px;
+  padding:9px 14px; border:1px solid var(--border); background:var(--surface); cursor:pointer;
+}
+button.primary{ background:var(--primary); color:#fff; border:none; font-weight:600; }
+
+.container{ max-width:1100px; margin:0 auto; padding:20px; }
+.summary{
+  font-size:0.82rem; color:var(--primary); font-weight:600;
+  background:var(--primary-soft); padding:10px 14px; border-radius:8px; margin-bottom:18px;
+}
+
+.grid{
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
+  gap:14px;
+}
+
+.card{
+  background:var(--surface); border:1px dashed var(--border); border-radius:var(--radius);
+  padding:16px 12px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:8px;
+  break-inside:avoid;
+}
+.card .qr-box{ display:flex; align-items:center; justify-content:center; }
+.card .nama{ font-size:0.85rem; font-weight:700; line-height:1.25; }
+.card .kelas{
+  font-size:0.68rem; font-weight:600; color:var(--text-muted);
+  background:var(--bg); padding:2px 9px; border-radius:20px;
+}
+
+.empty-state{ text-align:center; color:var(--text-muted); font-size:0.9rem; padding:60px 0; }
+
+@media print{
+  .toolbar{ display:none; }
+  body{ padding-bottom:0; background:#fff; }
+  .container{ padding:0; max-width:100%; }
+  .summary{ display:none; }
+  .card{ border:1px dashed #999; page-break-inside:avoid; }
+  .grid{ gap:10px; }
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div>
+    <h1>Generate QR Siswa</h1>
+    <div class="status" id="status">Memuat data siswa...</div>
+  </div>
+  <div class="toolbar-right">
+    <select id="filter-kelas" onchange="renderCards()">
+      <option value="">Semua Kelas</option>
+    </select>
+    <button onclick="fetchSiswa()">Muat Ulang</button>
+    <button class="primary" onclick="window.print()">Print / Simpan PDF</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="summary" id="summary"></div>
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+const URL_GAS = "https://script.google.com/macros/s/AKfycbwUdMDvqmG2ZTHYoHiZam1jSZS0fXBLZU1YE2jSbZH-oAgaGtbqkrfY0Rp6QYKXup2E/exec";
+
+let dataSiswa = [];
+
+async function fetchSiswa(){
+  const statusEl = document.getElementById("status");
+  statusEl.textContent = "Memuat data siswa...";
+  try{
+    const res = await fetch(URL_GAS);
+    const data = await res.json();
+    dataSiswa = (data.students || []).sort((a,b) => {
+      if (a.kelas === b.kelas) return a.nama.localeCompare(b.nama);
+      return a.kelas.localeCompare(b.kelas);
+    });
+    statusEl.textContent = `${dataSiswa.length} siswa berhasil dimuat`;
+    populateFilter();
+    renderCards();
+  } catch(err){
+    statusEl.textContent = "Gagal memuat data. Periksa koneksi internet.";
+  }
+}
+
+function populateFilter(){
+  const select = document.getElementById("filter-kelas");
+  const kelasList = [...new Set(dataSiswa.map(s => s.kelas))].sort();
+  select.innerHTML = `<option value="">Semua Kelas</option>` +
+    kelasList.map(k => `<option value="${k}">${k}</option>`).join("");
+}
+
+function renderCards(){
+  const filterKelas = document.getElementById("filter-kelas").value;
+  const grid = document.getElementById("grid");
+  const summary = document.getElementById("summary");
+
+  const filtered = filterKelas ? dataSiswa.filter(s => s.kelas === filterKelas) : dataSiswa;
+
+  if (filtered.length === 0){
+    grid.innerHTML = "";
+    summary.textContent = "";
+    document.getElementById("status").textContent = dataSiswa.length === 0
+      ? "Belum ada data siswa."
+      : "Tidak ada siswa pada kelas ini.";
+    return;
+  }
+
+  summary.textContent = `Menampilkan ${filtered.length} kartu QR${filterKelas ? " untuk kelas " + filterKelas : ""}`;
+
+  grid.innerHTML = filtered.map((s, idx) => `
+    <div class="card">
+      <div class="qr-box" id="qr-${idx}"></div>
+      <div class="nama">${s.nama}</div>
+      <span class="kelas">${s.kelas}</span>
+    </div>
+  `).join("");
+
+  filtered.forEach((s, idx) => {
+    new QRCode(document.getElementById(`qr-${idx}`), {
+      text: s.nama,
+      width: 130,
+      height: 130,
+      colorDark: "#18181b",
+      colorLight: "#ffffff"
+    });
+  });
+}
+
+window.onload = fetchSiswa;
+</script>
+</body>
+</html>

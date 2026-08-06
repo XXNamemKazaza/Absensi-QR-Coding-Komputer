@@ -109,6 +109,38 @@ h2.section-title{ font-size:0.95rem; font-weight:600; margin-bottom:14px; }
 
 .empty-state{ text-align:center; font-size:0.85rem; color:var(--text-muted); padding:16px 0; }
 
+/* Toast popup */
+.toast{
+  position:fixed; top:14px; left:50%; transform:translateX(-50%) translateY(-14px);
+  background:var(--text); color:#fff; padding:12px 20px; border-radius:10px;
+  font-size:0.85rem; font-weight:600; opacity:0; pointer-events:none;
+  transition:opacity 0.2s ease, transform 0.2s ease; z-index:2000;
+  box-shadow:0 8px 20px rgba(0,0,0,0.18); max-width:88%; text-align:center;
+}
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+.toast.success{ background:var(--success); }
+.toast.error{ background:var(--danger); }
+
+/* Avatar inisial */
+.avatar{
+  width:36px; height:36px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:700; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;
+  background:var(--primary-soft); color:var(--primary);
+}
+.avatar.gray{ background:var(--bg); color:var(--text-muted); }
+.avatar.danger{ background:var(--danger-soft); color:var(--danger); }
+
+.kelas-chip{
+  display:inline-block; font-size:0.68rem; font-weight:600;
+  padding:2px 8px; border-radius:20px; background:var(--bg); color:var(--text-muted);
+  margin-top:3px; letter-spacing:0.01em;
+}
+
+.row-left{ display:flex; align-items:center; gap:10px; min-width:0; }
+.row-name{ font-weight:600; font-size:0.9rem; }
+.row-name-block{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
+
 /* Siswa list */
 .search-bar{
   width:100%; padding:11px 13px; border:1px solid var(--border); border-radius:8px;
@@ -122,12 +154,12 @@ h2.section-title{ font-size:0.95rem; font-weight:600; margin-bottom:14px; }
 }
 
 .card{
-  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
   padding:12px 14px; margin-bottom:9px; display:flex; justify-content:space-between;
   align-items:center; gap:10px; flex-wrap:wrap;
 }
-.card-info h3{ font-size:0.92rem; font-weight:600; margin-bottom:2px; }
-.card-info p{ font-size:0.78rem; color:var(--text-muted); }
+.card-info{ display:flex; align-items:center; gap:10px; min-width:0; }
+.card-info h3{ font-size:0.92rem; font-weight:600; margin-bottom:0; }
 
 .badge-group{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
 .badge{ padding:4px 9px; border-radius:6px; font-size:0.72rem; font-weight:600; font-family:'IBM Plex Mono',monospace; }
@@ -156,22 +188,28 @@ h2.section-title{ font-size:0.95rem; font-weight:600; margin-bottom:14px; }
 .date-content{ display:none; padding:12px 4px 16px 8px; border-left:2px solid var(--border); margin-left:4px; }
 .date-content.open{ display:block; }
 
-.list-block{ margin-bottom:14px; }
+.list-block{
+  margin-bottom:14px; background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:12px 12px 4px 12px;
+}
 .list-block:last-child{ margin-bottom:0; }
 .list-label{
-  font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;
-  color:var(--text-muted); margin-bottom:6px;
+  font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;
+  margin-bottom:8px; display:flex; align-items:center; gap:6px;
 }
+.list-label::before{ content:""; width:7px; height:7px; border-radius:50%; display:inline-block; }
 .list-hadir .list-label{ color:var(--success); }
+.list-hadir .list-label::before{ background:var(--success); }
 .list-absen .list-label{ color:var(--danger); }
+.list-absen .list-label::before{ background:var(--danger); }
 
 .student-row{
   display:flex; justify-content:space-between; align-items:center;
-  padding:7px 0; border-bottom:1px solid var(--border); font-size:0.85rem;
+  padding:9px 0; border-bottom:1px solid var(--border); font-size:0.85rem; gap:10px;
 }
 .student-row:last-child{ border-bottom:none; }
 .student-row .muted{ color:var(--text-muted); font-size:0.8rem; }
-.row-actions{ display:flex; align-items:center; gap:8px; }
+.row-actions{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
 .btn-delete{
   background:none; border:1px solid var(--border); color:var(--danger);
   padding:3px 8px; border-radius:5px; font-size:0.72rem; cursor:pointer;
@@ -200,6 +238,7 @@ h2.section-title{ font-size:0.95rem; font-weight:600; margin-bottom:14px; }
 </header>
 
 <div id="loading-overlay">Memproses data...</div>
+<div id="toast" class="toast"></div>
 
 <!-- SCAN -->
 <div id="sec-scan" class="section">
@@ -345,6 +384,15 @@ function showLoading(show){
   document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
 }
 
+let toastTimer;
+function showToast(message, type){
+  const el = document.getElementById('toast');
+  el.textContent = message;
+  el.className = `toast show ${type || 'success'}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.classList.remove('show'); }, 2600);
+}
+
 /* ===== SCANNER ===== */
 async function resolveCameraId(){
   if (cameraId) return cameraId;
@@ -461,6 +509,7 @@ function removeSessionScan(idx){
 
 async function simpanAbsensi(){
   if (sessionScans.length === 0) return;
+  const jumlah = sessionScans.length;
   showLoading(true);
   try{
     const response = await fetch(URL_GAS, {
@@ -477,9 +526,10 @@ async function simpanAbsensi(){
     renderSessionScans();
     renderSiswa();
     renderKehadiran();
-    document.getElementById("scan-msg").textContent = "Absensi tersimpan";
+    document.getElementById("scan-msg").textContent = "Arahkan QR ke kamera";
+    showToast(`Absensi ${jumlah} siswa berhasil disimpan`, 'success');
   } catch(err){
-    alert("Gagal menyimpan absensi. Periksa koneksi internet.");
+    showToast("Gagal menyimpan absensi. Periksa koneksi internet.", 'error');
   }
   showLoading(false);
 }
@@ -533,8 +583,11 @@ function renderSiswa(){
     html += `
       <div class="card">
         <div class="card-info">
-          <h3>${siswa.nama}</h3>
-          <p>Kelas ${siswa.kelas}</p>
+          <div class="avatar">${getInitials(siswa.nama)}</div>
+          <div class="row-name-block">
+            <h3>${siswa.nama}</h3>
+            <span class="kelas-chip">${siswa.kelas}</span>
+          </div>
         </div>
         ${badges}
       </div>
@@ -580,6 +633,13 @@ function renderKehadiran(){
   container.innerHTML = html;
 }
 
+function getInitials(nama){
+  const parts = nama.trim().split(/\s+/);
+  const first = parts[0] ? parts[0][0] : "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return (first + last).toUpperCase();
+}
+
 function renderDateBlock(dateStr){
   const logsForDate = attendanceLog.filter(l => l.tanggal === dateStr);
   const hadirNames = logsForDate.map(l => l.nama);
@@ -589,7 +649,13 @@ function renderDateBlock(dateStr){
 
   const htmlHadir = logsForDate.map(l => `
     <div class="student-row">
-      <span>${l.nama} <span class="muted">(${l.kelas})</span></span>
+      <div class="row-left">
+        <div class="avatar">${getInitials(l.nama)}</div>
+        <div class="row-name-block">
+          <div class="row-name">${l.nama}</div>
+          <span class="kelas-chip">${l.kelas}</span>
+        </div>
+      </div>
       <span class="row-actions">
         <span class="mono muted">${l.jam}</span>
         <button class="btn-delete" onclick="hapusKehadiran('${dateStr}','${l.nama}')">Hapus</button>
@@ -598,7 +664,15 @@ function renderDateBlock(dateStr){
   `).join("") || `<p class="empty-state">Tidak ada.</p>`;
 
   const htmlBolos = absenSiswa.map(s => `
-    <div class="student-row"><span>${s.nama} <span class="muted">(${s.kelas})</span></span></div>
+    <div class="student-row">
+      <div class="row-left">
+        <div class="avatar gray">${getInitials(s.nama)}</div>
+        <div class="row-name-block">
+          <div class="row-name">${s.nama}</div>
+          <span class="kelas-chip">${s.kelas}</span>
+        </div>
+      </div>
+    </div>
   `).join("") || `<p class="empty-state">Semua hadir.</p>`;
 
   return `
@@ -642,8 +716,9 @@ async function hapusKehadiran(tanggal, nama){
 
     renderKehadiran();
     renderSiswa();
+    showToast("Data kehadiran berhasil dihapus", 'success');
   } catch(e){
-    alert("Gagal menghapus data.");
+    showToast("Gagal menghapus data.", 'error');
   }
   showLoading(false);
 }
